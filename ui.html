@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: 'Inter', sans-serif; padding: 12px; margin: 0; background: #fff; overflow-x: hidden; }
+    
+    /* Header & Mini Button */
+    .header { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; }
+    .mini-btn { 
+      flex: 1; padding: 6px; font-size: 11px; font-weight: 600;
+      background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; 
+      cursor: pointer; color: #333;
+    }
+    .mini-btn:hover { background: #e5e5e5; }
+
+    /* Main Content Styling */
+    #main-content { display: block; }
+    #main-content.hidden { display: none; }
+
+    .section-title { font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; margin: 16px 0 6px 0; }
+    
+    button.save-btn { 
+      width: 100%; padding: 10px; background: #18A0FB; color: white; 
+      border: none; border-radius: 6px; font-weight: 600; cursor: pointer;
+      margin-bottom: 4px;
+    }
+    button.save-btn:hover { background: #0d8de3; }
+
+    /* Card Styling */
+    .card { 
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 10px; background: #f9f9f9; border-radius: 6px; margin-bottom: 6px; 
+      border: 1px solid #eee; font-size: 12px; cursor: pointer; transition: all 0.1s;
+    }
+    .card:hover { border-color: #18A0FB; background: #fefefe; }
+    
+    .history-item { color: #555; }
+    .custom-item { border-left: 3px solid #18A0FB; font-weight: 500; }
+
+    /* Delete Button for Pinned items */
+    .delete-btn { 
+      opacity: 0.3; font-size: 14px; padding: 4px; border-radius: 4px;
+    }
+    .delete-btn:hover { opacity: 1; color: #f24822; background: #fff1f0; }
+    
+    .card-text { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <button class="mini-btn" id="toggleSize">↔ Collapse / Expand</button>
+  </div>
+
+  <div id="main-content">
+    <button class="save-btn" id="saveCustom">⭐ Pin Selected Frame</button>
+
+    <div class="section-title">📌 Custom Collection</div>
+    <div id="custom-container"></div>
+
+    <div class="section-title">🕒 Recent History</div>
+    <div id="history-container"></div>
+  </div>
+
+  <script>
+    const hContainer = document.getElementById('history-container');
+    const cContainer = document.getElementById('custom-container');
+    const mainContent = document.getElementById('main-content');
+    let isMini = false;
+
+    // --- BUTTON ACTIONS ---
+
+    // Toggle between Mini and Full view
+    document.getElementById('toggleSize').onclick = () => {
+      isMini = !isMini;
+      mainContent.classList.toggle('hidden');
+      
+      // Tell code.ts to resize the actual Figma window
+      parent.postMessage({ 
+        pluginMessage: { 
+          type: 'resize', 
+          width: isMini ? 150 : 300, 
+          height: isMini ? 45 : 450 
+        } 
+      }, '*');
+    };
+
+    // Pin a frame
+    document.getElementById('saveCustom').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'save-to-custom' } }, '*');
+    };
+
+    // --- DATA HANDLING ---
+
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (msg.type === 'update-ui' || msg.type === 'init-data') {
+        renderList(hContainer, msg.history, '🕒');
+        renderList(cContainer, msg.customCollection, '📌', true);
+      }
+    };
+
+    function renderList(container, items, icon, isCustom = false) {
+      container.innerHTML = '';
+      
+      if (items.length === 0) {
+        container.innerHTML = '<div style="font-size:11px; color:#ccc; padding:10px; text-align:center;">No items yet</div>';
+        return;
+      }
+
+      items.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = isCustom ? 'card custom-item' : 'card history-item';
+        
+        // Card Text
+        const textSpan = document.createElement('span');
+        textSpan.className = 'card-text';
+        textSpan.innerHTML = `${icon} ${item.name}`;
+        textSpan.onclick = () => {
+          parent.postMessage({ pluginMessage: { type: 'go-to-frame', id: item.id } }, '*');
+        };
+
+        card.appendChild(textSpan);
+
+        // If it's a Custom item, add a delete button
+        if (isCustom) {
+          const delBtn = document.createElement('span');
+          delBtn.innerHTML = '×';
+          delBtn.className = 'delete-btn';
+          delBtn.onclick = (e) => {
+            e.stopPropagation(); // Don't trigger the teleport
+            parent.postMessage({ pluginMessage: { type: 'delete-custom', id: item.id } }, '*');
+          };
+          card.appendChild(delBtn);
+        }
+        
+        container.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>
